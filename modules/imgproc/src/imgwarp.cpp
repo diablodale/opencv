@@ -1661,7 +1661,7 @@ private:
 
 }
 
-void cv::remap( InputArray _src, OutputArray _dst,
+void cv::remap_legacy( InputArray _src, OutputArray _dst,
                 InputArray _map1, InputArray _map2,
                 int interpolation, int borderType, const Scalar& borderValue )
 {

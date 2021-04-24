@@ -2413,10 +2413,79 @@ corresponds to the "outliers" in the source image are not modified by the functi
 @note
 Due to current implementation limitations the size of an input and output images should be less than 32767x32767.
  */
-CV_EXPORTS_W void remap( InputArray src, OutputArray dst,
+CV_EXPORTS_W void remap_legacy(InputArray src, OutputArray dst,
                          InputArray map1, InputArray map2,
                          int interpolation, int borderMode = BORDER_CONSTANT,
                          const Scalar& borderValue = Scalar());
+
+class CV_EXPORTS_W remap
+{
+private:
+    Mat map1_{};
+    Mat map2_{};
+    int interpolation_{};
+    int borderMode_ = BORDER_CONSTANT;
+    Scalar borderValue_ = Scalar();
+
+public:
+    // rule of 6: default constructors, assigns, destructor
+    CV_WRAP remap() = default;
+    CV_WRAP remap(const remap&) = default;
+    remap(remap&&) = default;
+    remap& operator=(const remap&) = default;
+    remap& operator=(remap &&) = default;
+    ~remap() = default;
+
+    // legacy signature constructor that runs with src and dst
+    remap(InputArray src, OutputArray dst,
+          InputArray map1, InputArray map2,
+          int interpolation, int borderMode = BORDER_CONSTANT,
+          const Scalar& borderValue = Scalar()) :
+          map1_(map1.getMat()), map2_(map2.getMat()), interpolation_(interpolation),
+          borderMode_(borderMode), borderValue_(borderValue)
+    {
+        cv::remap_legacy(src, dst, map1, map2, interpolation, borderMode, borderValue);
+    }
+
+    // constructor with all parameters
+    CV_WRAP remap(InputArray map1, InputArray map2,
+                  int interpolation, int borderMode = BORDER_CONSTANT,
+                  const Scalar& borderValue = Scalar()) CV_NOEXCEPT :
+                  map1_(map1.getMat()), map2_(map2.getMat()), interpolation_(interpolation),
+                  borderMode_(borderMode), borderValue_(borderValue)
+    {}
+
+    // setters with method chaining; approach already in cv::GpuMat
+    CV_WRAP remap& map1(InputArray map1) { map1_ = map1.getMat(); return *this; }
+    CV_WRAP remap& map2(InputArray map2) { map2_ = map2.getMat(); return *this; }
+    CV_WRAP remap& interpolation(int interpolation) CV_NOEXCEPT { interpolation_ = interpolation; return *this; }
+    CV_WRAP remap& borderMode(int borderMode) CV_NOEXCEPT { borderMode_ = borderMode; return *this; }
+    CV_WRAP remap& borderValue(const Scalar& borderValue) CV_NOEXCEPT { borderValue_ = borderValue; return *this; }
+
+    // optional getters; approach already in cv::StereoMatcher
+    CV_WRAP int interpolation() const CV_NOEXCEPT { return interpolation_; }
+    CV_WRAP int borderMode() const CV_NOEXCEPT { return borderMode_; }
+    CV_WRAP Scalar borderValue() const CV_NOEXCEPT { return borderValue_; }
+    CV_WRAP Mat map1() const CV_NOEXCEPT { return map1_; }
+    CV_WRAP Mat map2() const CV_NOEXCEPT { return map2_; }
+
+    // do remapping; approach already in cv::FeaturesMatcher and cv::Estimator
+    CV_WRAP_AS(run) void operator()(InputArray src, OutputArray dst) const {
+        if (!dst.needed()) return;
+        dst.createSameSize(src, src.type());
+        cv::remap_legacy(src, dst, map1_, map2_, interpolation_, borderMode_, borderValue_);
+    }
+
+    // easily supports mat, umat, and gpumat; could support more
+    // enables good interop with STL
+    template <typename U>
+    auto operator()(const U &src) const
+    {
+        U dst(src.size(), src.type());
+        cv::remap_legacy(src, dst, map1_, map2_, interpolation_, borderMode_, borderValue_);
+        return dst;
+    }
+};
 
 /** @brief Converts image transformation maps from one representation to another.
 

@@ -40,6 +40,7 @@
 //M*/
 
 #include "test_precomp.hpp"
+#include <map>
 
 namespace opencv_test { namespace {
 
@@ -820,6 +821,81 @@ void CV_RemapTest::prepare_to_validation( int /*test_case_idx*/ )
                test_mat[INPUT][2], &mask, interpolation );
     dst.setTo(Scalar::all(0), mask);
     dst0.setTo(Scalar::all(0), mask);
+}
+
+TEST(Imgproc_Remap, functor)
+{
+    /*
+    Five examples of flexibility; dev's choice/style
+
+    1. legacy backwards-compatible free-function style signature
+    remap(src, dst, map_x, map_y, INTER_LINEAR);
+
+    2.
+    auto remapper = remap().map1(map_x).map2(map_y).interpolation(INTER_LINEAR);
+
+    3.
+    auto remapper = remap(map_x, map_y, INTER_LINEAR);
+    remap remapper(map_x, map_y, INTER_LINEAR);
+
+    4.
+    remap remapper;
+    remapper.map1(map_x)
+            .map2(map_y)
+            .interpolation(INTER_LINEAR);
+
+    5.
+    auto remapper = std::make_shared<remap>();
+    remapper->map1(map_x).map2(map_y).interpolation(INTER_LINEAR);
+
+    */
+
+    Size size(100, 100);
+    Mat map_x(size, CV_32FC1);
+    Mat map_y(size, CV_32FC1);
+    for( int i = 0; i < map_x.rows; i++ ) {
+        for( int j = 0; j < map_x.cols; j++ ) {
+            map_x.at<float>(i, j) = (float)j;
+            map_y.at<float>(i, j) = (float)(map_x.rows - i);
+        }
+    }
+
+    // make functor and use named parameters for all
+    auto remapper = remap().map1(map_x).map2(map_y).interpolation(INTER_LINEAR);
+
+    // functor holds state and can be reused
+    for (int i = 0; i < 100; ++i) {
+        Mat src = Mat::eye(size, CV_32FC1);
+        Mat dst = Mat(size, CV_32FC1);
+        remapper(src, dst);
+    }
+
+    // ...or create and use once
+    Mat src2 = Mat::eye(size, CV_32FC1);
+    Mat dst2 = Mat(size, CV_32FC1);
+    remap().map1(map_x).map2(map_y).interpolation(INTER_LINEAR)(src2, dst2);
+
+    // ...or create and use once #2
+    remap(map_x, map_y, INTER_LINEAR)(src2, dst2);
+
+    // ...or create and use once #3 using the legacy backwards-compat signature
+    remap(src2, dst2, map_x, map_y, INTER_LINEAR);
+
+    // flexible return type operator() enables simple use cases
+    Mat src3 = Mat::eye(size, CV_32FC1);
+    UMat src4 = UMat::eye(size, CV_32FC1);
+    //GpuMat src5 = GpuMat::eye(size, CV_32FC1);
+    auto dst3 = remapper(src3);
+    auto dst4 = remapper(src4);
+
+    // operator() also enables good interop with STL :-)
+    auto cmp = [](Mat a, Mat b) { return a.data < b.data; };
+    std::set<Mat, decltype(cmp)> input(cmp);
+    input.insert({Mat::eye(size, CV_32FC1),
+                  Mat::eye(size, CV_32FC1),
+                  Mat::eye(size, CV_32FC1)});
+    std::vector<Mat> output;
+    std::transform(input.begin(), input.end(), std::back_inserter(output), remapper);
 }
 
 ////////////////////////////// GetRectSubPix /////////////////////////////////
